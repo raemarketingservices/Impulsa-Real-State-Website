@@ -1,0 +1,14 @@
+import {chromium} from '@playwright/test';
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const b=await chromium.launch({channel:'chrome',headless:true});const p=await b.newPage({viewport:{width:390,height:844}});const errors=[];p.on('pageerror',e=>errors.push(e.message));
+await p.goto('http://localhost:7007/vende-tu-propiedad');
+for(let i=0;i<3;i++)await p.getByRole('button',{name:'Continuar',exact:true}).click();
+await p.getByLabel('Precio estimado en dólares (USD)').fill('235000');await p.getByRole('button',{name:'Continuar',exact:true}).click();
+await p.getByLabel('Nombre',{exact:true}).fill('QA Propietario');await p.getByLabel('Apellido').fill('Temporal');await p.getByLabel('Correo electrónico').fill(`owner-${Date.now()}@example.com`);await p.getByLabel('WhatsApp',{exact:true}).fill('+18095550188');await p.getByRole('button',{name:'Continuar',exact:true}).click();await p.locator('input[type=file]').setInputFiles('public/images/house-1.jpg');await p.locator('input[type=checkbox]').check();await p.getByRole('button',{name:'Enviar mi solicitud'}).click();await p.getByText('Tu próximo paso ya empezó.').waitFor();console.log('PASS six-step owner wizard with private image upload');
+const access=JSON.parse(readFileSync('data/local-access.json','utf8'));const response=await fetch('http://localhost:7007/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(access.admin)});const cookie=response.headers.get('set-cookie').split(';')[0];
+const leads=await (await fetch('http://localhost:7007/api/leads',{headers:{cookie}})).json();const owner=leads.find(l=>l.name==='QA Propietario Temporal');assert(owner&&owner.attachments.length===1&&owner.details.area==='150');
+const owners=await (await fetch('http://localhost:7007/api/owners',{headers:{cookie}})).json();assert(owners.find(o=>o.id===owner.id));console.log('PASS inquiry creates related owner and lead with property details');
+const files=await(await fetch('http://localhost:7007/api/files',{headers:{cookie}})).json();const file=files.find(f=>f.id===owner.attachments[0]);assert((await fetch('http://localhost:7007'+file.url)).status===401);assert((await fetch('http://localhost:7007'+file.url,{headers:{cookie}})).status===200);console.log('PASS owner image privacy and authorized download');
+await p.goto('http://localhost:7007');await p.waitForLoadState('networkidle');await p.evaluate(()=>document.fonts.ready);await p.screenshot({path:'data/mobile-viewport.png'});await p.setViewportSize({width:1440,height:1000});await p.screenshot({path:'data/desktop-viewport.png'});assert(!errors.length,errors.join(';'));
+console.log('PASS no runtime errors');await b.close();

@@ -1,0 +1,30 @@
+import {chromium} from '@playwright/test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const browser=await chromium.launch({channel:'chrome',headless:true});
+const page=await browser.newPage({viewport:{width:1440,height:1000}});
+const errors=[];page.on('pageerror',e=>errors.push(e.message));
+let checks=0;function check(v,m){assert(v,m);console.log('PASS',m);checks++;}
+const base='http://localhost:7007';
+await page.goto(base,{waitUntil:'networkidle'});
+check(await page.getByRole('heading',{level:1}).isVisible(),'Home renders');
+await page.locator('.favorite').first().click();
+await page.goto(base+'/favoritos');await page.locator('.property-card').first().waitFor();check(await page.locator('.property-card').count()===1,'Saved property persists in favorites');
+await page.goto(base+'/propiedades?city=Santiago&sector=Gurabo');await page.waitForLoadState('networkidle');
+check(await page.locator('.property-card').count()===1,'City and sector search filters correctly');
+await page.getByRole('link',{name:'Ver Jardines de Gurabo'}).click();await page.waitForLoadState('networkidle');
+await page.getByRole('button',{name:'Ampliar fotografía 1'}).click();check(await page.locator('dialog').isVisible(),'Photo lightbox opens');await page.keyboard.press('Escape');
+await page.getByRole('button',{name:'Solicitar información'}).click();
+const dlg=page.locator('dialog');await dlg.getByLabel('Nombre',{exact:true}).fill('Cliente de navegador');await dlg.getByLabel('Apellido').fill('Prueba');await dlg.getByLabel('Correo electrónico').fill(`browser-${Date.now()}@example.com`);await dlg.getByLabel('WhatsApp',{exact:true}).fill('+18095550199');await dlg.locator('input[type=checkbox]').check();await dlg.getByRole('button',{name:'Enviar mi solicitud'}).click();await dlg.getByRole('heading',{name:'Tu próximo paso ya empezó.'}).waitFor();check(true,'Property inquiry completes in browser');await page.keyboard.press('Escape');
+await page.goto(base+'/login');await page.getByRole('button',{name:'Administración',exact:true}).click();await page.getByRole('button',{name:'Entrar a mi espacio'}).click();await page.waitForURL('**/admin');await page.locator('.stat-card').first().waitFor();check(await page.locator('.stat-card').count()===4,'Admin login and dashboard');await page.screenshot({path:'data/admin-desktop.png',fullPage:true});
+await page.goto(base+'/admin/leads');await page.locator('.lead-card').first().waitFor();check(await page.locator('.lead-card').count()>0,'CRM pipeline renders database leads');await page.screenshot({path:'data/crm-desktop.png',fullPage:true});
+await page.goto(base+'/admin/propiedades');await page.getByRole('button',{name:'Nueva propiedad'}).click();await page.locator('dialog').waitFor();check(await page.locator('dialog').getByLabel('Título',{exact:true}).isVisible(),'Property editor opens');await page.keyboard.press('Escape');
+await page.goto(base+'/admin/training');await page.locator('.lesson-list button').first().click();await page.locator('.quiz input').first().check();await page.getByRole('button',{name:'Comprobar y guardar progreso'}).click();await page.getByText('¡Muy bien! Completaste esta lección.').waitFor();check(true,'Training assessment and progress work');await page.keyboard.press('Escape');
+const routes=['/','/propiedades','/comprar','/alquilar','/proyectos','/agentes','/agentes/geovanny-reynoso','/nosotros','/contacto','/unete','/vende-tu-propiedad','/administracion-propiedades','/admin','/admin/leads','/admin/training','/admin/archivos'];
+await page.setViewportSize({width:390,height:844});for(const route of routes){await page.goto(base+route);await page.waitForLoadState('networkidle');check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`Mobile width: ${route}`);}
+await page.goto(base);await page.waitForLoadState('networkidle');
+await page.getByRole('button',{name:'Abrir menú',exact:true}).click();check(await page.locator('.site-header nav').isVisible(),'Mobile navigation opens');await page.getByRole('button',{name:'Cerrar menú',exact:true}).click();
+await page.evaluate(async()=>{for(const img of document.images){img.loading='eager';}await Promise.all([...document.images].map(i=>i.complete?Promise.resolve():new Promise(r=>{i.onload=r;i.onerror=r;})));});await page.screenshot({path:'data/home-mobile.png',fullPage:true});await page.screenshot({path:'data/mobile-viewport.png'});
+await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:'data/home-desktop.png',fullPage:true});await page.screenshot({path:'data/desktop-viewport.png'});
+check(errors.length===0,'No browser runtime errors: '+errors.join('; '));
+console.log(`\n${checks} browser checks passed.`);await browser.close();
