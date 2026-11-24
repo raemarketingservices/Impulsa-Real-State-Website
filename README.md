@@ -69,6 +69,33 @@ docker compose up --build -d
 
 Para la versión SQLite usa una sola instancia del servicio. Para escalar horizontalmente, conectar primero PostgreSQL/Supabase. Respaldar la base de datos con la API de backup de SQLite o con el servicio detenido; no copiar únicamente el archivo .db mientras WAL tiene escrituras pendientes.
 
+## Cloudflare Workers
+
+El despliegue en producción usa `@opennextjs/cloudflare` sobre Workers, con D1 (base de datos), R2 (archivos y caché incremental) e Images. Todo se declara en `wrangler.jsonc`, cuyo worker se llama `impulsa-real-estate`; la URL de destino es `https://impulsa-real-estate.aqui-rd.workers.dev`.
+
+GitHub Actions: `.github/workflows/deploy-cloudflare.yml` ejecuta `npm run typecheck` en cada push a `main` y, si pasa, compila con OpenNext y despliega. Necesita dos secrets en el repositorio (Settings → Secrets and variables → Actions):
+
+| Secret | Cómo obtenerlo |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → plantilla *Edit Cloudflare Workers* |
+| `CLOUDFLARE_ACCOUNT_ID` | Workers & Pages → id de cuenta en el panel derecho |
+
+Mientras falten, el job de deploy se omite con un aviso en vez de fallar. El workflow también se puede lanzar a mano (Actions → Deploy to Cloudflare → Run workflow).
+
+Requisitos previos en la cuenta de Cloudflare, ya reflejados en `wrangler.jsonc`: base D1 `impulsa-db`, buckets R2 `impulsa-files` y `impulsa-real-estate-opennext-cache`. Para cargar datos locales en D1 remoto, `npm run db:push` (genera el SQL desde SQLite y lo aplica con `wrangler d1 execute --remote`); `npm run db:pull` hace lo inverso.
+
+```sh
+npx opennextjs-cloudflare build   # compilar
+npm run preview                   # probar el runtime de Workers en local
+npm run deploy                    # desplegar desde tu máquina
+```
+
+El build de Cloudflare no se ejecutó ni verificó en esta entrega: no hay credenciales de la cuenta disponibles en este entorno.
+
+## Licencia
+
+Software propietario: todos los derechos reservados, ver [LICENSE](LICENSE). La publicación del repositorio no concede licencia de uso.
+
 ## Estructura
 
 - `app/[[...slug]]/page.tsx`: rutas y control de acceso del sitio/portal.
